@@ -1,0 +1,127 @@
+---
+
+- hosts: all
+  become: true
+
+  handlers:
+        - name: restart ssh
+          service:
+                  name: sshd
+                  state: restarted
+
+        - name: restart iptables
+          service:
+                  name: iptables
+                  state: restarted
+
+  pre_tasks:
+        - name: Disable Firewalld
+          service:
+                  name: firewalld
+                  state: stopped
+
+        - name: Install Iptables
+          yum:
+                  update_cache: yes
+                  name:
+                          - iptables
+                          - iptables-services
+                  state: latest
+
+        - name: Start iptables-service
+          service:
+                  name: iptables
+                  state: started
+                  enabled: yes
+
+  tasks:
+        - name: Tell SELinux about new ssh port
+          seport:
+                  ports: 2222
+                  proto: tcp
+                  setype: ssh_port_t
+                  state: present
+
+        - name: Make sure SSH is more secure
+          lineinfile:
+                  dest: /etc/ssh/sshd_config
+                  regexp: "{{ item.regexp }}"
+                  line: "{{ item.line }}"
+                  state: present
+          with_items:
+                  - regexp: "^PasswordAuthentication"
+                    line: "PasswordAuthentication no"
+                  - regexp: "^#PermitRootLogin"
+                    line: "PermitRootLogin no"
+                  - regexp: "^Port"
+                    line: "Port 2222"
+          notify: restart ssh
+
+        - name: Add new user John
+          user:
+                  name: john
+        
+        - name: Add sudo rights to user John
+          lineinfile:
+                  dest: /etc/sudoers
+                  regexp: "^john"
+                  line: "john ALL=(ALL) NOPASSWD: ALL"
+                  state: present
+
+        - name: Flush existing firewall rules
+          iptables:
+                  flush: true
+
+        - name: Allow lo traffic
+          iptables:
+                  action: append
+                  chain: INPUT
+                  in_interface: lo
+                  jump: ACCEPT
+
+        - name: Allow RELATED and ESTABLISHED connections
+          iptables:
+                  chain: INPUT
+                  ctstate: ESTABLISHED,RELATED
+                  jump: ACCEPT
+
+        - name: Allow ICMP packages
+          iptables:
+                  chain: INPUT
+                  jump: ACCEPT
+                  protocol: icmp
+
+        - name: Allow SSH/22
+          iptables:
+                  chain: INPUT
+                  jump: ACCEPT
+                  destination_port: 2222
+                  protocol: tcp
+
+        - name: Allow ports 443 
+          iptables:
+                  chain: INPUT
+                  ctstate: ESTABLISHED,NEW
+                  jump: ACCEPT
+                  destination_port: 443
+                  protocol: tcp
+
+        - name: Allow DNS server
+          iptables:
+                  chain: INPUT
+                  jump: ACCEPT
+                  protocol: udp
+                  source: 10.0.2.3
+                  source_port: 53
+
+        - name: Drop any package withou rule
+          iptables:
+                  chain: INPUT
+                  jump: DROP
+
+        - name: Save existing rules
+          command: service iptables save
+          notify: restart iptables
+
+
+            
