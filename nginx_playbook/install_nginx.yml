@@ -1,0 +1,69 @@
+---
+
+      - hosts: all
+        become: true
+        pre_tasks:
+
+                - name: Install all dependency and update cache
+                  yum:
+                          update_cache: yes
+                          name: "{{ item }}"
+                          state: latest
+                  with_items:
+                          - pcre
+                          - pcre-devel
+                          - zlib
+                          - zlib-devel
+                          - openssl-devel
+                          - unzip
+                          - make
+                          - gcc  
+        tasks:
+                - name: Download Nginx source
+                  get_url:
+                          url: "http://nginx.org/download/nginx-1.18.0.tar.gz"
+                          dest: "/tmp/nginx-1.18.0.tar.gz"
+                
+                - name: Unarchive
+                  unarchive:
+                          src: "http://nginx.org/download/nginx-1.18.0.tar.gz"
+                          dest: /tmp/
+                          remote_src: yes
+                          mode: 0755
+                          owner: root
+                          group: root
+                          creates: /tmp/nginx-1.18.0
+               
+                - name: Configuring NGINX source with modules
+                  command: > 
+                          ./configure --sbin-path=/usr/bin/nginx 
+                          --conf-path=/etc/nginx/nginx.conf 
+                          --error-log-path=/var/log/nginx/error.log 
+                          --http-log-path=/var/log/nginx/access.log 
+                          --pid-path=/var/run/nginx.pid 
+                          --with-http_ssl_module 
+                          --with-pcre
+                          creates=/usr/bin/nginx
+                  args:
+                          chdir: /tmp/nginx-1.18.0
+                  register: nginx_configure
+
+                - name: Install NGINX
+                  shell: make && make install
+                  args:
+                          chdir: /tmp/nginx-1.18.0
+                  when: nginx_configure.changed
+
+                - name: Copy systemd service file
+                  copy:
+                          src: files/nginx.service
+                          dest: /lib/systemd/system/nginx.service
+                          owner: root
+                          group: root
+                          mode: 0755
+
+                - name: Start Nginx as service and enable at boot
+                  service:
+                          name: nginx.service
+                          state: started
+                          enabled: yes
