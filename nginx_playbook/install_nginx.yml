@@ -17,16 +17,17 @@
                           - openssl-devel
                           - unzip
                           - make
-                          - gcc  
-        tasks:
+                          - gcc
+                          
                 - name: Download Nginx source
                   get_url:
                           url: "http://nginx.org/download/nginx-1.18.0.tar.gz"
                           dest: "/tmp/nginx-1.18.0.tar.gz"
+        tasks:
                 
                 - name: Unarchive
                   unarchive:
-                          src: "http://nginx.org/download/nginx-1.18.0.tar.gz"
+                          src: /tmp/nginx-1.18.0.tar.gz
                           dest: /tmp/
                           remote_src: yes
                           mode: 0755
